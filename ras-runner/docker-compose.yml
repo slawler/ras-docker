@@ -5,11 +5,12 @@ services:
     container_name: ras-run
     build:
       context: .
-      dockerfile: Dockerfile-alt
+      dockerfile: Dockerfile
+      target: builder
     volumes:
       - ./:/app
     env_file:
       - ./.env
     entrypoint: |
-      /src/go/bin/CompileDaemon --build="go build main.go" --command="./main -payload=runs/realization_1/event_1/payload.yml"
+      /src/go/bin/CompileDaemon --build="go build main.go" --command="./main -payload=jobs/muncie/muncie-r1-e2-ras-runner.yml"
     # entrypoint: sleep 1d
