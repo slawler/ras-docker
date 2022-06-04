@@ -1,0 +1,4 @@
+*.env
+.vscode/
+docker-cmds.sh
+main
