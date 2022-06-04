@@ -27,56 +27,56 @@ _Note that currently **name**, **format**, and **scheme** are not required by th
 
 ```yaml
 model_configuration:
-model_name: Muncie
+  model_name: Muncie
 model_links:
-linked_inputs:
+  linked_inputs:
     - name: 1
-    format: object
-    resource_info:
+      format: object
+      resource_info:
         scheme: s3
         authority: cloud-wat-dev
-        fragment: models/Muncie/Muncie.p04.tmp.hdf
+        fragment: runs/realization_1/event_2/Muncie.p04.tmp.hdf
     - name: 2
-    format: object
-    resource_info:
+      format: object
+      resource_info:
         scheme: s3
         authority: cloud-wat-dev
         fragment: models/Muncie/Muncie.b04
     - name: 3
-    format: object
-    resource_info:
+      format: object
+      resource_info:
         scheme: s3
         authority: cloud-wat-dev
         fragment: models/Muncie/Muncie.prj
     - name: 4
-    format: object
-    resource_info:
+      format: object
+      resource_info:
         scheme: s3
         authority: cloud-wat-dev
         fragment: models/Muncie/Muncie.x04
     - name: 5
-    format: object
-    resource_info:
+      format: object
+      resource_info:
         scheme: s3
         authority: cloud-wat-dev
         fragment: models/Muncie/Muncie.c04
-required_outputs:
+  required_outputs:
     - name: 1
-    format: object
-    resource_info:
+      format: object
+      resource_info:
         scheme: s3
         authority: cloud-wat-dev
-        fragment: runs/realization_1/event_1/Muncie.p04.hdf
+        fragment: runs/realization_1/event_2/Muncie.p04.hdf
     - name: 2
-    format: object
-    resource_info:
+      format: object
+      resource_info:
         scheme: s3
         authority: cloud-wat-dev
-        fragment: runs/realization_1/event_1/Muncie.dss
+        fragment: runs/realization_1/event_2/Muncie.dss
     - name: 3
-    format: object
-    resource_info:
+      format: object
+      resource_info:
         scheme: s3
         authority: cloud-wat-dev
-        fragment: runs/realization_1/event_1/Muncie.log
+        fragment: runs/realization_1/event_2/Muncie.log
 ```
