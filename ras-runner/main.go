@@ -31,24 +31,18 @@ func main() {
 	flag.StringVar(&payloadFile, "payload", "s3-key.yml", "path to s3 payload file")
 	flag.Parse()
 
-	fmt.Println("payloadFile", payloadFile)
-
-	// _ = os.Getenv("AWS_ACCESS_KEY_ID")
-	// _ = os.Getenv("AWS_SECRET_ACCESS_KEY")
 	S3Bucket := os.Getenv("AWS_BUCKET")
 
+	fmt.Println("Reading payloadFile", payloadFile)
 	payload, err := fetchPayload(S3Bucket, payloadFile)
 	if err != nil {
-		log.Println(err)
-		os.Exit(1)
+		log.Fatal(err)
 	}
 
 	logFile := filepath.Join(MODEL_DIR, payload.ModelConfiguration.ModelName+".log")
-
 	logOutput, err := os.OpenFile(logFile, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0600)
 	if err != nil {
-		log.Println(err)
-		os.Exit(1)
+		log.Fatal(err)
 	}
 	defer logOutput.Close()
 
@@ -56,24 +50,25 @@ func main() {
 	mw := io.MultiWriter(os.Stdout, logOutput)
 	log.SetOutput(mw)
 
+	fmt.Println("Fetching Inputs...")
 	_, err = fetchInputs(payload, MODEL_DIR)
 	if err != nil {
-		log.Println(err)
-		os.Exit(1)
+		log.Fatal(err)
 	}
 
+	fmt.Println("Running model....")
 	err = runModel(payload, MODEL_DIR)
 	if err != nil {
-		log.Println(err)
-		os.Exit(1)
+		log.Fatal("Error running model:", err)
 	}
 
+	fmt.Println("Pushing results......")
 	err = pushOutputs(payload, MODEL_DIR)
 	if err != nil {
-		log.Println(err)
-		os.Exit(1)
+		log.Fatal(err)
 	}
 
+	fmt.Println("Done.")
 }
 
 func fetchPayload(bucket, payloadFile string) (Payload, error) {
@@ -119,7 +114,7 @@ func fetchInputs(payload Payload, localDir string) ([]string, error) {
 
 		obj, err := svc.GetObject(input)
 		if err != nil {
-			log.Println("Error!!!", err)
+			log.Fatal("S3 Fetch Error", err)
 			return localFiles, err
 		}
 		defer obj.Body.Close()
@@ -129,14 +124,14 @@ func fetchInputs(payload Payload, localDir string) ([]string, error) {
 
 		f, err := os.OpenFile(localFile, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0600)
 		if err != nil {
-			log.Println("Error!!!", err)
+			log.Fatal("Open File Error", err)
 			return localFiles, err
 		}
 		defer f.Close()
 
 		_, err = io.Copy(f, obj.Body)
 		if err != nil {
-			log.Println("Error!!!", err)
+			log.Fatal("Write File Error", err)
 			return localFiles, err
 		}
 
@@ -148,6 +143,7 @@ func fetchInputs(payload Payload, localDir string) ([]string, error) {
 }
 
 func runModel(payload Payload, localDir string) error {
+	fmt.Println("Run Args: ", SCRIPT, localDir, payload.ModelConfiguration.ModelName)
 
 	cmd := exec.Command(SCRIPT, localDir, payload.ModelConfiguration.ModelName)
 	stdout, err := cmd.StdoutPipe()
@@ -250,13 +246,13 @@ type ResourceInfo struct {
 }
 
 type LinkedInputs struct {
-	Name         int          `yaml:"name"`
+	Name         string       `yaml:"name"`
 	Format       string       `yaml:"format"`
 	ResourceInfo ResourceInfo `yaml:"resource_info"`
 }
 
 type RequiredOutputs struct {
-	Name         int          `yaml:"name"`
+	Name         string       `yaml:"name"`
 	Format       string       `yaml:"format"`
 	ResourceInfo ResourceInfo `yaml:"resource_info"`
 }
