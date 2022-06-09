@@ -15,6 +15,7 @@ import (
 	"strings"
 
 	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/s3"
 
@@ -28,13 +29,17 @@ const SCRIPT = "/app/run-model.sh"
 
 func main() {
 	var payloadFile string
-	flag.StringVar(&payloadFile, "payload", "s3-key.yml", "path to s3 payload file")
+	flag.StringVar(&payloadFile, "f", "s3-key.yml", "path to s3 payload file")
+
+	var s3Endpoint string
+	flag.StringVar(&s3Endpoint, "m", "", "S3Endpoint for mocking")
+
 	flag.Parse()
 
 	S3Bucket := os.Getenv("AWS_BUCKET")
 
 	fmt.Println("Reading payloadFile", payloadFile)
-	payload, err := fetchPayload(S3Bucket, payloadFile)
+	payload, err := fetchPayload(S3Bucket, payloadFile, s3Endpoint)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -51,7 +56,7 @@ func main() {
 	log.SetOutput(mw)
 
 	fmt.Println("Fetching Inputs...")
-	_, err = fetchInputs(payload, MODEL_DIR)
+	_, err = fetchInputs(payload, MODEL_DIR, s3Endpoint)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -63,7 +68,7 @@ func main() {
 	}
 
 	fmt.Println("Pushing results......")
-	err = pushOutputs(payload, MODEL_DIR)
+	err = pushOutputs(payload, MODEL_DIR, s3Endpoint)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -71,14 +76,41 @@ func main() {
 	fmt.Println("Done.")
 }
 
-func fetchPayload(bucket, payloadFile string) (Payload, error) {
+func awsS3Session(s3Endpoint string) (*s3.S3, error) {
+	var err error
+	keyID := os.Getenv("AWS_ACCESS_KEY_ID")
+	secretKey := os.Getenv("AWS_SECRET_ACCESS_KEY")
+	region := os.Getenv("AWS_REGION")
+	creds := credentials.NewStaticCredentials(keyID, secretKey, "")
+	cfg := aws.NewConfig().WithRegion(region).WithCredentials(creds)
+
+	if s3Endpoint != "" {
+		cfg.WithDisableSSL(true)
+		cfg.WithS3ForcePathStyle(true)
+		cfg.WithEndpoint(s3Endpoint)
+		fmt.Println("Using Mock environment", s3Endpoint)
+		session, err := session.NewSession(cfg)
+		return s3.New(session), err
+	}
+
+	session, err := session.NewSession(cfg)
+	return s3.New(session), err
+}
+
+func fetchPayload(bucket, payloadFile, s3Endpoint string) (Payload, error) {
 	payload := Payload{}
 
-	svc := s3.New(session.New())
+	svc, err := awsS3Session(s3Endpoint)
+	if err != nil {
+		return payload, err
+	}
+
 	input := &s3.GetObjectInput{
 		Bucket: aws.String(bucket),
 		Key:    aws.String(payloadFile),
 	}
+
+	// fmt.Println(bucket, payloadFile)
 
 	obj, err := svc.GetObject(input)
 	if err != nil {
@@ -99,10 +131,13 @@ func fetchPayload(bucket, payloadFile string) (Payload, error) {
 	return payload, nil
 }
 
-func fetchInputs(payload Payload, localDir string) ([]string, error) {
+func fetchInputs(payload Payload, localDir, s3Endpoint string) ([]string, error) {
 
 	localFiles := make([]string, len(payload.ModelLinks.LinkedInputs))
-	svc := s3.New(session.New())
+	svc, err := awsS3Session(s3Endpoint)
+	if err != nil {
+		return localFiles, err
+	}
 
 	for i, link := range payload.ModelLinks.LinkedInputs {
 
@@ -114,7 +149,7 @@ func fetchInputs(payload Payload, localDir string) ([]string, error) {
 
 		obj, err := svc.GetObject(input)
 		if err != nil {
-			log.Fatal("S3 Fetch Error", err)
+			log.Fatalf("ERROR: %s", err)
 			return localFiles, err
 		}
 		defer obj.Body.Close()
@@ -122,16 +157,16 @@ func fetchInputs(payload Payload, localDir string) ([]string, error) {
 		fileName := filepath.Base(link.ResourceInfo.Fragment)
 		localFile := filepath.Join(localDir, fileName)
 
-		f, err := os.OpenFile(localFile, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0600)
+		f, err := os.OpenFile(localFile, os.O_WRONLY|os.O_CREATE, 0600)
 		if err != nil {
-			log.Fatal("Open File Error", err)
+			log.Fatalf("ERROR: %s", err)
 			return localFiles, err
 		}
 		defer f.Close()
 
 		_, err = io.Copy(f, obj.Body)
 		if err != nil {
-			log.Fatal("Write File Error", err)
+			log.Fatalf("ERROR: %s", err)
 			return localFiles, err
 		}
 
@@ -192,9 +227,11 @@ func runModel(payload Payload, localDir string) error {
 	return nil
 }
 
-func pushOutputs(payload Payload, localDir string) error {
-
-	svc := s3.New(session.New())
+func pushOutputs(payload Payload, localDir, s3Endpoint string) error {
+	svc, err := awsS3Session(s3Endpoint)
+	if err != nil {
+		return err
+	}
 
 	for _, link := range payload.ModelLinks.RequiredOutputs {
 
