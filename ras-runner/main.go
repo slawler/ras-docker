@@ -8,10 +8,12 @@ import (
 	"io"
 	"io/ioutil"
 	"log"
+	"math"
 	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/aws/aws-sdk-go/aws"
@@ -19,6 +21,8 @@ import (
 	"github.com/aws/aws-sdk-go/service/s3"
 
 	"gopkg.in/yaml.v2"
+
+	"github.com/usace/wat-go-sdk/plugin"
 )
 
 const RAS_LIB_PATH = "/ras/libs:/ras/libs/mkl:/ras/libs/rhel_8"
@@ -39,7 +43,7 @@ func main() {
 		log.Fatal(err)
 	}
 
-	logFile := filepath.Join(MODEL_DIR, payload.ModelConfiguration.ModelName+".log")
+	logFile := filepath.Join(MODEL_DIR, payload.Model.Name+payload.Model.Alternative+".log")
 	logOutput, err := os.OpenFile(logFile, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0600)
 	if err != nil {
 		log.Fatal(err)
@@ -71,8 +75,8 @@ func main() {
 	fmt.Println("Done.")
 }
 
-func fetchPayload(bucket, payloadFile string) (Payload, error) {
-	payload := Payload{}
+func fetchPayload(bucket, payloadFile string) (plugin.ModelPayload, error) {
+	payload := plugin.ModelPayload{}
 
 	svc := s3.New(session.New())
 	input := &s3.GetObjectInput{
@@ -99,27 +103,27 @@ func fetchPayload(bucket, payloadFile string) (Payload, error) {
 	return payload, nil
 }
 
-func fetchInputs(payload Payload, localDir string) ([]string, error) {
+func fetchInputs(payload plugin.ModelPayload, localDir string) ([]string, error) {
 
-	localFiles := make([]string, len(payload.ModelLinks.LinkedInputs))
+	localFiles := make([]string, len(payload.Inputs))
 	svc := s3.New(session.New())
 
-	for i, link := range payload.ModelLinks.LinkedInputs {
+	for i, link := range payload.Inputs {
 
-		log.Println(i, link.ResourceInfo.Fragment)
+		log.Println(i, link.ResourceInfo.Path)
 		input := &s3.GetObjectInput{
-			Bucket: aws.String(link.ResourceInfo.Authority),
-			Key:    aws.String(link.ResourceInfo.Fragment),
+			Bucket: aws.String(link.ResourceInfo.Root),
+			Key:    aws.String(link.ResourceInfo.Path),
 		}
 
 		obj, err := svc.GetObject(input)
 		if err != nil {
-			log.Fatal("S3 Fetch Error", err)
+			log.Fatal("S3 Fetch Error | ", link.ResourceInfo.Path, err)
 			return localFiles, err
 		}
 		defer obj.Body.Close()
 
-		fileName := filepath.Base(link.ResourceInfo.Fragment)
+		fileName := filepath.Base(link.ResourceInfo.Path)
 		localFile := filepath.Join(localDir, fileName)
 
 		f, err := os.OpenFile(localFile, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0600)
@@ -142,10 +146,51 @@ func fetchInputs(payload Payload, localDir string) ([]string, error) {
 	return localFiles, nil
 }
 
-func runModel(payload Payload, localDir string) error {
-	fmt.Println("Run Args: ", SCRIPT, localDir, payload.ModelConfiguration.ModelName)
+func remove(slice []float64, i int) []float64 {
+	return append(slice[:i], slice[i+1:]...)
+}
 
-	cmd := exec.Command(SCRIPT, localDir, payload.ModelConfiguration.ModelName)
+func getPercentComplete(s string, cv *[]float64) bool {
+	logEntry := strings.Split(s, "=")
+	pctComplete := strings.TrimSpace(logEntry[1])
+	if num, err := strconv.ParseFloat(pctComplete, 32); err == nil {
+		for i, val := range *cv {
+			if math.Abs(val-num) < 0.01 {
+				*cv = remove(*cv, i)
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func rasPctLog(startLogging *int, message string, checkValues *[]float64) {
+
+	// RAS hack to only print progress every 10%
+	if strings.Contains(message, "LABEL= Unsteady Flow Computations") {
+		// trigger logging
+		*startLogging += 1
+	}
+
+	if strings.Contains(message, "LABEL= Unsteady Flow Warmup") {
+		// trigger logging
+		*startLogging -= 1
+	}
+
+	if *startLogging > 0 && strings.Contains(message, "PROGRESS") {
+		msg := getPercentComplete(message, checkValues)
+
+		if msg == true {
+			log.Printf(message)
+
+		}
+	}
+}
+
+func runModel(payload plugin.ModelPayload, localDir string) error {
+	fmt.Println("Run Args: ", SCRIPT, localDir, payload.Model.Name)
+
+	cmd := exec.Command(SCRIPT, localDir, payload.Model.Name)
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		log.Println(err)
@@ -159,9 +204,15 @@ func runModel(payload Payload, localDir string) error {
 
 	in := bufio.NewScanner(stdout)
 
+	// Logging placeholder
+	startLogging := 0
+	checkValues := []float64{0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0}
+
 	for in.Scan() {
-		log.Printf(in.Text())
+		message := in.Text()
+		rasPctLog(&startLogging, message, &checkValues)
 	}
+
 	if err := in.Err(); err != nil {
 		log.Println(err)
 		return err
@@ -192,13 +243,13 @@ func runModel(payload Payload, localDir string) error {
 	return nil
 }
 
-func pushOutputs(payload Payload, localDir string) error {
+func pushOutputs(payload plugin.ModelPayload, localDir string) error {
 
 	svc := s3.New(session.New())
 
-	for _, link := range payload.ModelLinks.RequiredOutputs {
+	for _, link := range payload.Outputs {
 
-		fileName := filepath.Base(link.ResourceInfo.Fragment)
+		fileName := filepath.Base(link.ResourceInfo.Path)
 		localFile := filepath.Join(localDir, fileName)
 
 		file, err := os.Open(localFile)
@@ -213,8 +264,8 @@ func pushOutputs(payload Payload, localDir string) error {
 		file.Read(buffer)
 
 		_, err = svc.PutObject(&s3.PutObjectInput{
-			Bucket:        aws.String(link.ResourceInfo.Authority),
-			Key:           aws.String(link.ResourceInfo.Fragment),
+			Bucket:        aws.String(link.ResourceInfo.Root),
+			Key:           aws.String(link.ResourceInfo.Path),
 			Body:          bytes.NewReader(buffer),
 			ContentLength: aws.Int64(size),
 			ContentType:   aws.String(http.DetectContentType(buffer)),
@@ -225,39 +276,4 @@ func pushOutputs(payload Payload, localDir string) error {
 		}
 	}
 	return nil
-}
-
-// Placeholder for storing payload instructions while specification is in progress
-//  Generated using: https://zhwt.github.io/yaml-to-go/
-
-type Payload struct {
-	ModelConfiguration ModelConfiguration `yaml:"model_configuration"`
-	ModelLinks         ModelLinks         `yaml:"model_links"`
-}
-
-type ModelConfiguration struct {
-	ModelName string `yaml:"model_name"`
-}
-
-type ResourceInfo struct {
-	Scheme    string `yaml:"scheme"`
-	Authority string `yaml:"authority"`
-	Fragment  string `yaml:"fragment"`
-}
-
-type LinkedInputs struct {
-	Name         string       `yaml:"name"`
-	Format       string       `yaml:"format"`
-	ResourceInfo ResourceInfo `yaml:"resource_info"`
-}
-
-type RequiredOutputs struct {
-	Name         string       `yaml:"name"`
-	Format       string       `yaml:"format"`
-	ResourceInfo ResourceInfo `yaml:"resource_info"`
-}
-
-type ModelLinks struct {
-	LinkedInputs    []LinkedInputs    `yaml:"linked_inputs"`
-	RequiredOutputs []RequiredOutputs `yaml:"required_outputs"`
 }

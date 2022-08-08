@@ -12,5 +12,8 @@ services:
     env_file:
       - ./.env
     entrypoint: |
-      /src/go/bin/CompileDaemon --build="go build main.go" --command="./main -payload=jobs/muncie/muncie-r1-e2-ras-runner.yml"
+      /src/go/bin/CompileDaemon --build="go build main.go" --command="./main -payload=runs/Muncie/muncie-r1-e3-ras-runner.yml"
+
+    # entrypoint: |
+    #   /src/go/bin/CompileDaemon --build="go build main.go" --command="./main -payload=jobs/muncie/muncie-r1-e3-ras-runner.yml"
     # entrypoint: sleep 1d
