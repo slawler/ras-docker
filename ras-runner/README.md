@@ -26,57 +26,51 @@ Development space for containerized HEC-RAS simulations
 _Note that currently **name**, **format**, and **scheme** are not required by the container but left in as place holders to conform more closely with the payload conceptualized in the [wat-api](https://github.com/USACE/wat-api/blob/768aa27753a1337cc7a3cdfa059f43ca202da433/configs/ras-runner_payload.yml#L1)_
 
 ```yaml
-model_configuration:
-  model_name: Muncie
-model_links:
-  linked_inputs:
-    - name: 1
-      format: object
-      resource_info:
-        scheme: s3
-        authority: cloud-wat-dev
-        fragment: runs/realization_1/event_2/Muncie.p04.tmp.hdf
-    - name: 2
-      format: object
-      resource_info:
-        scheme: s3
-        authority: cloud-wat-dev
-        fragment: models/Muncie/Muncie.b04
-    - name: 3
-      format: object
-      resource_info:
-        scheme: s3
-        authority: cloud-wat-dev
-        fragment: models/Muncie/Muncie.prj
-    - name: 4
-      format: object
-      resource_info:
-        scheme: s3
-        authority: cloud-wat-dev
-        fragment: models/Muncie/Muncie.x04
-    - name: 5
-      format: object
-      resource_info:
-        scheme: s3
-        authority: cloud-wat-dev
-        fragment: models/Muncie/Muncie.c04
-  required_outputs:
-    - name: 1
-      format: object
-      resource_info:
-        scheme: s3
-        authority: cloud-wat-dev
-        fragment: runs/realization_1/event_2/Muncie.p04.hdf
-    - name: 2
-      format: object
-      resource_info:
-        scheme: s3
-        authority: cloud-wat-dev
-        fragment: runs/realization_1/event_2/Muncie.dss
-    - name: 3
-      format: object
-      resource_info:
-        scheme: s3
-        authority: cloud-wat-dev
-        fragment: runs/realization_1/event_2/Muncie.log
+payload_id: 17b6ca16-70af-54bd-98d3-0329d69b957b
+model:
+  name: Muncie
+  alternative: .p04
+event_index: 0
+inputs:
+  - id: d1d60c2e-f3b4-436b-9c87-aaaaaaaaaaa1
+    filename: Muncie.p04.tmp.hdf
+    resource_info:
+      store: s3
+      root: cloud-wat-dev
+      path: runs/test/Muncie/Muncie.p04.tmp.hdf
+  - id: cb950b3f-e4ff-4109-936c-aaaaaaaaaaa2
+    filename: Muncie.b04
+    resource_info:
+      store: s3
+      root: cloud-wat-dev
+      path: runs/test/Muncie/Muncie.b04
+  - id: cb950b3f-e4ff-4109-936c-aaaaaaaaaaa3
+    filename: Muncie.prj
+    resource_info:
+      store: s3
+      root: cloud-wat-dev
+      path: runs/test/Muncie/Muncie.prj
+  - id: cb950b3f-e4ff-4109-936c-aaaaaaaaaaa4
+    filename: Muncie.x04
+    resource_info:
+      store: s3
+      root: cloud-wat-dev
+      path: runs/test/Muncie/Muncie.x04
+  - id: cb950b3f-e4ff-4109-936c-aaaaaaaaaaa5
+    filename: Muncie.b04
+    resource_info:
+      store: s3
+      root: cloud-wat-dev
+      path: runs/test/Muncie/Muncie.c04
+outputs:
+  - filename: Muncie.p04.hdf
+    resource_info:
+      store: s3
+      root: cloud-wat-dev
+      path: runs/test/results/Muncie/Muncie.p04.hdf
+  - filename: Muncie.b04
+    resource_info:
+      store: s3
+      root: cloud-wat-dev
+      path: runs/test/results/Muncie/Muncie.p04.log
 ```
