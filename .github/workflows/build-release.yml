@@ -17,7 +17,7 @@ jobs:
 
       - name: Build Container
         run: |
-          docker build ./6.1/ubi8.5 --target prod -t lawlerseth/ras-docker-6.1-ubi8.5:latest
+          docker build ./ras-runner --target prod -t lawlerseth/ras-docker-6.1-ubi8.5:latest
       
       - name: Login to DockerHub
         env:
