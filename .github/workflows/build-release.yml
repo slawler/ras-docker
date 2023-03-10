@@ -11,28 +11,31 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v2
+      
+      - name: Set date env
+        run: echo "DATETAG=v$(date +'%Y.%m.%d')" >> $GITHUB_ENV
+
       - name: Build Container
         run: |
           docker build ./6.1/ubi8.5 --target prod -t lawlerseth/ras-docker-6.1-ubi8.5:latest
-      - name: Bump a new Release and update Version
-        uses: actions/checkout@v2
-        with:
-          fetch-depth: '0'
-      - name: Bump version and push tag
-        uses: anothrNick/github-tag-action@1.26.0
-        id: update-tag
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          WITH_V: true
-          RELEASE_BRANCHES: dev
+      
       - name: Login to DockerHub
         env:
           DOCKER_USER: ${{secrets.DOCKER_USER}}
           DOCKER_PASSWORD: ${{secrets.DOCKER_PASSWORD}}
         run: |
           docker login -u $DOCKER_USER -p $DOCKER_PASSWORD
+      
       - name: Push Container to DockerHub
         run: |
-          docker tag lawlerseth/ras-docker-6.1-ubi8.5:latest lawlerseth/ras-docker-6.1-ubi8.5:${{steps.update-tag.outputs.new_tag}}
-          docker push lawlerseth/ras-docker-6.1-ubi8.5:${{steps.update-tag.outputs.new_tag}}
+          docker tag lawlerseth/ras-docker-6.1-ubi8.5:latest lawlerseth/ras-docker-6.1-ubi8.5:${{ env.DATETAG }}
+          docker push lawlerseth/ras-docker-6.1-ubi8.5:${{ env.DATETAG }}
           docker push lawlerseth/ras-docker-6.1-ubi8.5:latest
+
+      - name: Release
+        uses: softprops/action-gh-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          name: ${{ env.DATETAG }}
+          tag_name: ${{ env.DATETAG }}
