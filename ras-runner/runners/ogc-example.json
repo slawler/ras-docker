@@ -1,0 +1,40 @@
+{
+    "model_name": "Muncie",
+    "bucket": "cloud-wat-dev",
+    "inputs": [
+        {
+            "href": "/runs/realization_0/event_0/Muncie.p04.tmp.hdf",
+            "rel": "part"
+        },
+        {
+            "href": "/data/models/Muncie/Muncie.b04",
+            "rel": "part"
+        },
+        {
+            "href": "/data/models/Muncie/Muncie.prj",
+            "rel": "part"
+        },
+        {
+            "href": "/data/models/Muncie/Muncie.x04",
+            "rel": "part"
+        },
+        {
+            "href": "/data/models/Muncie/Muncie.c04",
+            "rel": "part"
+        }
+    ],
+    "outputs": [
+        {
+            "href": "/runs/realization_0/event_0/Muncie.p04.hdf",
+            "rel": "part"
+        },
+        {
+            "href": "/runs/realization_0/event_0/Muncie.log",
+            "rel": "part"
+        },
+        {
+            "href": "/runs/realization_0/event_0/Muncie.dss",
+            "rel": "part"
+        }
+    ]
+}
