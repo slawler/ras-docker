@@ -217,7 +217,7 @@ func (r *OGCRunner) CopyOutputs() error {
 		}
 
 		_, err = svc.PutObject(&s3.PutObjectInput{
-			Bucket:        aws.String(link.Href),
+			Bucket:        aws.String(r.Bucket),
 			Key:           aws.String(link.Href),
 			Body:          file,
 			ContentLength: aws.Int64(size),
