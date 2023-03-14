@@ -19,7 +19,7 @@ const (
 )
 
 type Runner interface {
-	ModelName() string
+	ModelName() (string, error)
 	PrepRun() error
 	Run() error
 	CopyOutputs() error
@@ -53,7 +53,11 @@ func main() {
 		return
 	}
 
-	modelName := r.ModelName()
+	modelName, err := r.ModelName()
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
 	logFile := filepath.Join(MODEL_DIR, modelName+".log")
 	logOutput, err := os.OpenFile(logFile, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0600)
 	if err != nil {

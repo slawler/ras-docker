@@ -25,9 +25,8 @@ type OGCRunner struct {
 }
 
 type Payload struct {
-	ModelName string    `json:"model_name"`
-	Inputs    []Inputs  `json:"inputs"`
-	Outputs   []Outputs `json:"outputs"`
+	Inputs  []Inputs  `json:"inputs"`
+	Outputs []Outputs `json:"outputs"`
 }
 
 type Inputs struct {
@@ -40,8 +39,19 @@ type Outputs struct {
 	Rel  string `json:"rel"`
 }
 
-func (r *OGCRunner) ModelName() string {
-	return r.Payload.ModelName
+func (r *OGCRunner) ModelName() (modelName string, err error) {
+	// Ignoring extensions, ensure input file names all start with the same string (up to first period), then return that.
+	var candidate string
+	for i, link := range r.Payload.Inputs {
+		candidate = strings.Split(filepath.Base(link.Href), ".")[0]
+		if i == 0 {
+			modelName = candidate
+		} else if modelName != candidate {
+			err = fmt.Errorf("inputs do not all resolve to same modelName (%s vs %s)", modelName, candidate)
+			return
+		}
+	}
+	return
 }
 
 func (r *OGCRunner) PrepRun() error {
@@ -103,8 +113,12 @@ func (r *OGCRunner) PrepRun() error {
 }
 
 func (r *OGCRunner) Run() error {
-
-	cmd := exec.Command("/app/run-model.sh", "/sim/model", r.ModelName())
+	modelName, err := r.ModelName()
+	if err != nil {
+		fmt.Println(err)
+		return err
+	}
+	cmd := exec.Command("/app/run-model.sh", "/sim/model", modelName)
 	cmd.Dir = r.LocalDir
 	msg := fmt.Sprintf("running model from directory '%s' with args: [ %s ]", r.LocalDir, strings.Join(cmd.Args, ", "))
 	fmt.Println(msg)
@@ -137,7 +151,7 @@ func (r *OGCRunner) Run() error {
 		"100%": 1.0,
 	}
 
-	computeLog := filepath.Join(r.LocalDir, r.ModelName()+".log")
+	computeLog := filepath.Join(r.LocalDir, modelName+".log")
 	f, err := os.OpenFile(computeLog, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0600)
 	if err != nil {
 		fmt.Println(err)
