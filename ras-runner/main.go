@@ -37,9 +37,10 @@ func main() {
 
 	switch runnerType {
 	case "ogc":
-		r = &runners.OGCRunner{PayloadFile: payloadFile, LocalDir: MODEL_DIR, Bucket: "cloud-wat-dev"}
+		r = &runners.OGCRunner{PayloadFile: payloadFile, LocalDir: MODEL_DIR, Bucket: os.Getenv("AWS_BUCKET")}
 		if err != nil {
 			fmt.Println("Error running model:", err)
+			return
 		}
 	default:
 		fmt.Println(err)
