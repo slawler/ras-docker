@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	"github.com/aws/aws-sdk-go/aws"
@@ -50,6 +51,54 @@ func (r *OGCRunner) ModelName() (modelName string, err error) {
 			err = fmt.Errorf("inputs do not all resolve to same modelName (%s vs %s)", modelName, candidate)
 			return
 		}
+	}
+	return
+}
+
+func (r *OGCRunner) GeomID() (geomID string, err error) {
+	// Scan the Payload's input file list, and return the 2-digit suffix associated with the .cNN file
+	var pattern string = `\.c(\d{2})$` // e.g. extract "03" from "foobar.c03"
+	var rgx = regexp.MustCompile(pattern)
+	for _, link := range r.Payload.Inputs {
+		matches := rgx.FindStringSubmatch(link.Href)
+		if len(matches) != 2 {
+			continue
+		}
+		if geomID == "" {
+			// first .cNN file found
+			geomID = matches[1]
+		} else {
+			// found another .cNN file
+			err = fmt.Errorf("multiple files in payload inputs matched pattern %q", pattern)
+			return
+		}
+	}
+	if geomID == "" {
+		err = fmt.Errorf("no file in payload inputs matched pattern %q", pattern)
+	}
+	return
+}
+
+func (r *OGCRunner) UnsteadyID() (unsteadyID string, err error) {
+	// Scan the Payload's input file list, and return the 2-digit suffix associated with the .bNN file
+	var pattern string = `\.b(\d{2})$` // e.g. extract "03" from "foobar.b03"
+	var rgx = regexp.MustCompile(pattern)
+	for _, link := range r.Payload.Inputs {
+		matches := rgx.FindStringSubmatch(link.Href)
+		if len(matches) != 2 {
+			continue
+		}
+		if unsteadyID == "" {
+			// first .bNN file found
+			unsteadyID = matches[1]
+		} else {
+			// found another .bNN file
+			err = fmt.Errorf("multiple files in payload inputs matched pattern %q", pattern)
+			return
+		}
+	}
+	if unsteadyID == "" {
+		err = fmt.Errorf("no file in payload inputs matched pattern %q", pattern)
 	}
 	return
 }
@@ -118,12 +167,31 @@ func (r *OGCRunner) Run() error {
 		fmt.Println(err)
 		return err
 	}
-	cmd := exec.Command("/app/run-model.sh", "/sim/model", modelName)
+
+	geomID, err := r.GeomID()
+	if err != nil {
+		fmt.Println(err)
+		return err
+	}
+
+	unsteadyID, err := r.UnsteadyID()
+	if err != nil {
+		fmt.Println(err)
+		return err
+	}
+
+	cmd := exec.Command("/app/run-model.sh", modelName, geomID, unsteadyID)
 	cmd.Dir = r.LocalDir
-	msg := fmt.Sprintf("running model from directory '%s' with args: [ %s ]", r.LocalDir, strings.Join(cmd.Args, ", "))
+	msg := fmt.Sprintf("running model from directory '%s' with args: [ %s ]", cmd.Dir, strings.Join(cmd.Args, ", "))
 	fmt.Println(msg)
 
 	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		fmt.Println(err)
+		return err
+	}
+
+	stderr, err := cmd.StderrPipe()
 	if err != nil {
 		fmt.Println(err)
 		return err
@@ -171,6 +239,21 @@ func (r *OGCRunner) Run() error {
 
 	if err := in.Err(); err != nil {
 		fmt.Println(err)
+		return err
+	}
+
+	// extract stderr messages
+	stderrBytes, err := io.ReadAll(stderr)
+	if err != nil {
+		fmt.Println(err)
+		return err
+	}
+	// check if the command failed
+	err = cmd.Wait()
+	if err != nil {
+		// exitError := err.(*exec.ExitError)
+		// fmt.Printf("command exited with non-zero code: %d\n", exitError.ExitCode())
+		fmt.Printf("vvvvv below is stderr from failing command\n%s\n^^^^^ above is stderr from failing command\n", stderrBytes)
 		return err
 	}
 
