@@ -2,7 +2,7 @@ package main
 
 import (
 	"app/runners"
-	"flag"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -19,30 +19,39 @@ const (
 )
 
 type Runner interface {
-	ModelName() string
+	ModelName() (string, error)
 	PrepRun() error
 	Run() error
 	CopyOutputs() error
 }
 
 func main() {
-	var runnerType string
-	var payloadFile string
+
+	// var runnerType string
 	var r Runner
 	var err error
 
-	flag.StringVar(&runnerType, "r", "ogc", "runner to use, currently support wat or ogc")
-	flag.StringVar(&payloadFile, "f", "ogc-payloads/example.json", "path to s3 payload file")
-	flag.Parse()
+	// // Local dev only
+	// err = godotenv.Load(".env")
+	// if err != nil {
+	// 	log.Fatal("Error loading .env file")
+	// }
 
-	switch runnerType {
-	case "ogc":
-		r = &runners.OGCRunner{PayloadFile: payloadFile, LocalDir: MODEL_DIR, Bucket: "cloud-wat-dev"}
-		if err != nil {
-			fmt.Println("Error running model:", err)
-		}
-	default:
-		fmt.Println(err)
+	if len(os.Args) != 2 {
+		log.Fatal("no inputs provided, program requires `inputs: {Params}`")
+	}
+
+	// fmt.Println(os.Args[1])
+	// Fetch inputs
+	p, err := FetchParams(os.Args[1])
+	if err != nil {
+		log.Fatal(err)
+	}
+	// err := p
+
+	r = &runners.OGCRunner{PayloadFile: p.S3key, LocalDir: MODEL_DIR, Bucket: os.Getenv("AWS_BUCKET")}
+	if err != nil {
+		fmt.Println("Error running model:", err)
 		return
 	}
 
@@ -52,7 +61,11 @@ func main() {
 		return
 	}
 
-	modelName := r.ModelName()
+	modelName, err := r.ModelName()
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
 	logFile := filepath.Join(MODEL_DIR, modelName+".log")
 	logOutput, err := os.OpenFile(logFile, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0600)
 	if err != nil {
@@ -80,4 +93,32 @@ func main() {
 	}
 
 	fmt.Println("Done")
+}
+
+type Inputs struct {
+	Inputs Params `json:"inputs"`
+}
+
+type Params struct {
+	S3key string `json:"s3key"`
+}
+
+func FetchParams(inputString string) (Params, error) {
+	var params Params
+	if inputString == "" {
+		return params, fmt.Errorf("WaterhsedID and additional params required")
+	}
+
+	err := json.Unmarshal([]byte(inputString), &params)
+	if err != nil {
+		fmt.Println("error unmarshaling input params:", err)
+		return params, err
+	}
+
+	return params, nil
+}
+
+// TODO
+func (params Params) Validate() error {
+	return nil
 }

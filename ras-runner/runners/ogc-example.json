@@ -1,6 +1,4 @@
 {
-    "model_name": "Muncie",
-    "bucket": "cloud-wat-dev",
     "inputs": [
         {
             "href": "/runs/realization_0/event_0/Muncie.p04.tmp.hdf",
